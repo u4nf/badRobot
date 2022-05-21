@@ -10,8 +10,20 @@ parser = argparse.ArgumentParser(description='A tool to analyse robots.txt and r
 parser.add_argument('-d', type=str,  help='Domain to analyse')
 args=parser.parse_args()
 
-host = 'https://' + args.d
+#check for http prefix
+if not re.match('^(?:http://|https://).*$', args.d):
+	host = 'https://' + args.d
+else:
+	host = args.d
+
 print('Assessing ' + host + '\n\n')
+
+try:
+	test = requests.get(host)
+except:
+	print('Unable to parse, check above URL for validity\naccepted - domain.com, http://domain.com, https://domain.com')
+	exit(1)
+
 
 def attempt(file, reg0, reg1, reg2):
 	#checks for existance of file.txt
@@ -22,8 +34,7 @@ def attempt(file, reg0, reg1, reg2):
 	picker = requests.get(host + "/" + file)
 
 	if picker.status_code != 200:
-		print('Failed: ' + str(picker.status_code))
-		return 'Failed'
+		print('Not found: ' + str(picker.status_code))
 		exit(1)
 	else:
 		print('Success')
