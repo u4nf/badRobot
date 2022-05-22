@@ -14,32 +14,65 @@ def validateArgs():
 	args=parser.parse_args()
 
 	if not re.match('^(?:http://|https://).*$', args.d):
-		host = 'https://' + args.d
+		domain = 'https://' + args.d
 	else:
-		host = args.d
+		domain = args.d
 
-	return host
+	toCrawlUrls.append(domain)
 
+	return domain, domain
 
-#masterlists
-uniqueUrls = []
-uniqueJs = []
-uniqueEmail = []
 
 def crawl(currentUrl):
 	#extract data from HTML
+	#print('crawling ' + currentUrl)
 
-	def noDupe(inList, UniqueList, identity, currentUrl):
+	def noDupe(inList, uniqueList, doneList, identity, currentUrl):
 		#adds to unique list if not seen before
 
-		print('Details for ' + currentUrl)
 		count = 0
+
 		for i in inList:
-			if i not in UniqueList:
-				UniqueList.append(i)
+			#check that URL is within scope of domain
+
+			if (i in uniqueList) or (i in doneList):
+				continue
+
+			elif re.match('.*' + domain + '.*', i):
+				uniqueList.append(i)
 				count += 1
 
+			else:
+				#Url points externally
+				if (i not in externalUrls):
+					externalUrls.append(i)
+					
 		print(identity + '\'s found - ' + str(len(inList)) + ' // Unseen - ' + str(count))
+
+
+	def noDupeUrl(urlList, toCrawlUrls, crawledUrls, currentUrl):
+
+		count = 0
+		countExt = 0
+
+		for i in urlList:
+
+			if (i in toCrawlUrls) or (i in crawledUrls) or (i in externalUrls):
+				#url already recorded
+				continue
+
+			elif re.match('^.*' + domain + '.*$', i):
+				#url in scope
+				toCrawlUrls.append(i)
+				count += 1
+
+			else:
+				#url not in scope
+				externalUrls.append(i)
+				countExt += 1
+
+		print('URL\'s found on page- ' + str(len(urlList)) + ' // Unseen - ' + str(count))
+		print('Unique offsite URLs found - ' + str(countExt))
 
 
 	def parseUrl(currentUrl):
@@ -48,25 +81,64 @@ def crawl(currentUrl):
 		try:
 			pageObject = requests.get(currentUrl)
 		except:
-			print('Unable to parse, check above URL for validity\naccepted - domain.com, http://domain.com, https://domain.com')
+			print('Unable to parse, check above URL for validity (maybe add / remove "www." prefix)\naccepted - domain.com, http://domain.com, https://domain.com')
 			exit(1)
 
 		return pageObject
 
 
 	pageObject = parseUrl(currentUrl)
+	print('\nDetails for ' + currentUrl + '\n')
 
 	#extract and clean data
 	urlList = re.findall('href="(https://.*?)"', pageObject.text)
-	noDupe(urlList, uniqueUrls, 'URL', currentUrl)
+	noDupeUrl(urlList, toCrawlUrls, crawledUrls, currentUrl)
+
 
 	jsList = re.findall('(?:\'|src=")(.*\.js)', pageObject.text)
-	noDupe(jsList, uniqueJs, 'JS', currentUrl)
+	noDupe(jsList, toCrawlJs, crawledJs, 'JS', currentUrl)
 
 	emailList = re.findall('[^\w]([\w\d]*@[\w\d]*\.[\w\d]*?)', pageObject.text)
-	noDupe(emailList, uniqueEmail, 'Email', currentUrl)
+	noDupe(emailList, uniqueEmail, uniqueEmail, 'Email', currentUrl)
+
+	
+	crawledUrls.append(currentUrl)
 
 
-currentUrl = validateArgs()
-print('Assessing ' + currentUrl + '\n')
+	del toCrawlUrls[0]
+	print('\nUrls remaining to crawl: ' + str(len(toCrawlUrls)) + '\n\n')
+
+	if len(toCrawlUrls) > 0:
+		crawl(toCrawlUrls[0])
+	else:
+		print('All done.\n')
+
+def report():
+	print('\ncrawled Urls:')
+	for i in crawledUrls:
+		print(i)
+	
+	print('\nExtermal links:')
+	for i in externalUrls:
+		print(i)
+
+	print('\nFound email addreses:')
+	for i in uniqueEmail:
+		print(i)
+
+	print('\nFound JS:')
+	for i in toCrawlJs:
+		print(i)
+
+	exit(0)
+
+
+#masterlists
+externalUrls, crawledUrls, toCrawlUrls = [], [], []
+crawledJs, toCrawlJs = [], []
+uniqueEmail = []
+
+currentUrl, domain = validateArgs()
+
 crawl(currentUrl)
+report()
